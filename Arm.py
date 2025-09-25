@@ -1,6 +1,21 @@
 import cv2
+import numpy as np
 
 capture = cv2.VideoCapture(0)
+
+
+
+def nothing(x):
+    return
+
+
+cv2.namedWindow('Trackbars')
+cv2.createTrackbar("H_low", "Trackbars", 0, 179, nothing)
+cv2.createTrackbar("H_high", "Trackbars", 10, 179, nothing)
+cv2.createTrackbar("S_low", "Trackbars", 140, 255, nothing)
+cv2.createTrackbar("S_high", "Trackbars", 255, 255, nothing)
+cv2.createTrackbar("V_low", "Trackbars", 80, 255, nothing)
+cv2.createTrackbar("V_high", "Trackbars", 180, 255, nothing)
 
 while True:
     ret, frame = capture.read()
@@ -11,17 +26,30 @@ while True:
     hsv_frame = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
 
     # HSV color: (6.19, 69.29%, 54.9%) -> (6, 177, 140) in OpenCV HSV (H:0-179, S:0-255, V:0-255)
-    lower_color = (3, 140, 100)
-    upper_color = (10, 255, 180)
+    #lower_color = (3, 140, 100)
+    #upper_color = (10, 255, 180)
+    h_low = cv2.getTrackbarPos("H_low", "Trackbars")
+    h_high = cv2.getTrackbarPos("H_high", "Trackbars")
+    s_low = cv2.getTrackbarPos("S_low", "Trackbars")
+    s_high = cv2.getTrackbarPos("S_high", "Trackbars")
+    v_low = cv2.getTrackbarPos("V_low", "Trackbars")
+    v_high = cv2.getTrackbarPos("V_high", "Trackbars")
+
+    lower_color = np.array([h_low, s_low, v_low])
+    upper_color = np.array([h_high, s_high, v_high])
 
     mask = cv2.inRange(hsv_frame, lower_color, upper_color)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     for contour in contours:
-        area = cv2.contourArea(contour)
+        largest_contour = max(contours, key=cv2.contourArea)
+        area = cv2.contourArea(largest_contour)
         if area > 500:
-            x, y, w, h = cv2.boundingRect(contour)
+            x, y, w, h = cv2.boundingRect(largest_contour)
             cord_x = x + w // 2
             cord_y = y + h // 2
             cv2.circle(frame, (cord_x, cord_y), 5, (255, 0, 0), -1)
@@ -33,5 +61,7 @@ while True:
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+
 capture.release()
 cv2.destroyAllWindows()
