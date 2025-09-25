@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 4
+names: ['Eraser', 'Pencil', 'Scale', 'Sharpner']
+
+roboflow:
+  workspace: stationarydetector
+  project: stationary-detection-pkbvn
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/stationarydetector/stationary-detection-pkbvn/dataset/3
