@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
+import math
 
-capture = cv2.VideoCapture(0)
+capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 
 
 
@@ -11,16 +12,23 @@ def nothing(x):
 
 cv2.namedWindow('Trackbars')
 cv2.createTrackbar("H_low", "Trackbars", 0, 179, nothing)
-cv2.createTrackbar("H_high", "Trackbars", 10, 179, nothing)
-cv2.createTrackbar("S_low", "Trackbars", 140, 255, nothing)
+cv2.createTrackbar("H_high", "Trackbars", 179, 179, nothing)
+cv2.createTrackbar("S_low", "Trackbars", 113, 255, nothing)
 cv2.createTrackbar("S_high", "Trackbars", 255, 255, nothing)
-cv2.createTrackbar("V_low", "Trackbars", 80, 255, nothing)
-cv2.createTrackbar("V_high", "Trackbars", 180, 255, nothing)
+cv2.createTrackbar("V_low", "Trackbars", 130, 255, nothing)
+cv2.createTrackbar("V_high", "Trackbars", 200, 255, nothing)
+
 
 while True:
     ret, frame = capture.read()
     if not ret:
         break
+
+    frame = cv2.resize(frame, (1400, 720))
+
+    height, width = frame.shape[:2]
+    frame_center_x = width // 2
+    frame_center_y = height // 2
 
     blurred_frame = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv_frame = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
@@ -50,15 +58,26 @@ while True:
         area = cv2.contourArea(largest_contour)
         if area > 500:
             x, y, w, h = cv2.boundingRect(largest_contour)
-            cord_x = x + w // 2
-            cord_y = y + h // 2
-            cv2.circle(frame, (cord_x, cord_y), 5, (255, 0, 0), -1)
+            object_cord_x = x + w // 2
+            object_cord_y = y + h // 2
+            cv2.circle(frame, (object_cord_x, object_cord_y), 5, (255, 0, 0), -1)
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(frame, "Object Detected", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+            distance_x = object_cord_x - frame_center_x
+            distance_y = object_cord_y - frame_center_y
+            shortest_distance = math.hypot(distance_x, distance_y)
+            cv2.line(frame, (frame_center_x, frame_center_y), (object_cord_x, object_cord_y), (0, 0, 255), 2)
+
+            angle_rad = math.atan2(distance_y, distance_x)
+            angle_deg = math.degrees(angle_rad)
+            cv2.putText(frame, f"Angle: {angle_deg:.2f} degrees", (x, y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     cv2.imshow('Original Frame', frame)
     cv2.imshow('Mask', mask)
 
+
+    
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
