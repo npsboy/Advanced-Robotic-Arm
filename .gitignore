@@ -128,3 +128,71 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Machine Learning & YOLO Specific
+# Training runs and results
+runs/
+wandb/
+*.pt
+*.pth
+*.onnx
+*.torchscript
+
+# Datasets (large files)
+Datasets/
+datasets/
+data/
+*.zip
+*.tar.gz
+*.rar
+
+# Model weights and checkpoints
+weights/
+checkpoints/
+models/
+*.weights
+*.cfg
+
+# Training logs and outputs
+*.log
+*.txt
+logs/
+tensorboard/
+
+# Cache files
+*.cache
+.cache/
+__pycache__/
+
+# Large media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg_original
+*.png_original
+
+# Temporary training files
+train_batch*.jpg
+val_batch*.jpg
+*.tmp
+temp/
+
+# GPU/CUDA related
+.nvidia/
+
+# MLflow
+mlruns/
+
+# Annotation tools
+labelImg/
+labelme/
+
+# Detection results
+results/
+detections/
+predictions/
+
+# Backup files
+*.bak
+*.backup
