@@ -1,6 +1,12 @@
 import cv2
 import numpy as np
 import math
+from transformers import OwlViTProcessor, OwlViTForObjectDetection
+from PIL import Image
+import requests
+import torch
+import os
+import time
 
 capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 
