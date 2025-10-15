@@ -3,11 +3,13 @@ import numpy as np
 import math
 from transformers import OwlViTProcessor, OwlViTForObjectDetection
 from PIL import Image
-import requests
 import torch
 import os
 import time
 import keyboard
+import json
+import serial
+import time
 
 #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 capture = cv2.VideoCapture(0)
@@ -15,6 +17,12 @@ capture = cv2.VideoCapture(0)
 
 processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
 model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
+
+serial_port = 'COM6'
+pico_serial = serial.Serial(serial_port, 115200, timeout=1)
+time.sleep(2)
+
+base_servo_angle = 50
 
 def nothing(x):
     return
@@ -36,7 +44,7 @@ def on_a_press(event):
 
     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(img)
-    texts = [["pen", "pencil", "eraser", "sharpener", "book"]]
+    texts = [["pen", "pencil", "eraser", "sharpener"]]
     inputs = processor(text=texts, images=img, return_tensors="pt")
     outputs = model(**inputs)
     results = processor.post_process_object_detection(outputs=outputs, target_sizes=[img.size[::-1]], threshold=0.01)[0]
@@ -68,6 +76,13 @@ def on_a_press(event):
 
     angle_rad = math.atan2(distance_y, distance_x)
     angle_deg = math.degrees(angle_rad)
+    global base_servo_angle
+    base_servo_angle = 90 - angle_deg
+    if base_servo_angle < 0:
+        base_servo_angle = 0
+    elif base_servo_angle > 180:
+        base_servo_angle = 180
+
     distance = math.hypot(distance_x, distance_y)
 
     cv2.line(frame, (frame_center_x, frame_center_y), (int(object_center_x), int(object_center_y)), (0, 0, 255), 2)
@@ -89,10 +104,16 @@ while True:
     # Display annotated frame in a separate window if available
     if annotated_frame is not None:
         cv2.imshow("Detected Object", annotated_frame)
+
+    instructions = {"angle": base_servo_angle, "servo": 1}
+    pico_serial.write(f"{json.dumps(instructions)}\n".encode())
+    pico_serial.flush()
+
     
     # Press 'q' to quit
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 capture.release()
+cv2.destroyAllWindows()
 cv2.destroyAllWindows()
