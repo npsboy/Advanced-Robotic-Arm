@@ -63,3 +63,16 @@ This, I soon discovered, wouldn't work as the height of the arm itself was more 
 ![0.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5OSwicHVyIjoiYmxvYl9pZCJ9fQ==--d9760e4894258abca9975a46e729fc9110fa22fe/0.jpg)
   
 
+## 10/18/2025 2 AM - Software Blueprint  
+
+The various features of this project, like computer vision, TTS, Speech detection, and AI assistance, would require some heavy Python libraries.
+While a Pico can be programmed using Python, it cannot handle such heavy libraries, nor does it have any built-in speakers, mics or wifi modules. Thus, the main program will have to run on my computer, and instructions will have to be relayed to the Pico via USB.
+![diagram.png](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6MjkwOSwicHVyIjoiYmxvYl9pZCJ9fQ==--f8882561ccafacece094f0a50314d60a17251336/diagram.png)
+
+- Initial versions of the program will detect objects solely based on their colour using OpenCV, a Python library.
+- Future versions will use a machine-learning library like YoLO-V8 to detect common stationery objects. The model will have to be trained to detect the objects.
+- Speech to text will be handled by OpenAI Whisper.
+- Text-to-speech using pyttsx3.
+- User's speech processing (IE, AI assistant) will be integrated using OpenAI's API.
+  
+
