@@ -19,7 +19,7 @@ After exploring some ideas, I came across this one. A rough idea of what I wante
 - Controlled by voice commands in natural language.
 ![image.png](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg4NiwicHVyIjoiYmxvYl9pZCJ9fQ==--be22ed8b44d79f32dda65217032984c80f67e436/image.png)  
 
-## 10/18/2025 1 AM - Exploring Feasibility  
+## 10/18/2025 1:00 AM - Exploring Feasibility  
 
 After drafting an idea, I spent some time exploring its feasibility. Here's what I found:
 
@@ -29,5 +29,30 @@ After drafting an idea, I spent some time exploring its feasibility. Here's what
 
 ![image.png](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg4NywicHVyIjoiYmxvYl9pZCJ9fQ==--36d86ebccb78824fffd17e68596b7c3a2d636f83/image.png)
 This image shows the top down camera setup I had in mind.
+  
+
+## 10/18/2025 1:36 AM - Identifying Materials for Arm  
+
+## Body:
+Requirements: Cheap, Sturdy, Workable.
+Initial hopes to get 3D printed parts were ruled out due to cost.
+Finally chose foam board. Cheapest option sturdier than cardboard.
+![0.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5MCwicHVyIjoiYmxvYl9pZCJ9fQ==--8ed3b6c7811eda39a7d4ebf10c36b23e5134a7ed/0.jpg)
+
+## Actuators:
+Four Mg-995 high-torque, metal gear servo motors for all four joints.
+![0.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5MSwicHVyIjoiYmxvYl9pZCJ9fQ==--1800c841f8472fa45527a11019265e96c2bbea0b/0.jpg)
+
+
+## Micro-Controller:
+Raspberry Pi Pico.
+![0.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5MiwicHVyIjoiYmxvYl9pZCJ9fQ==--9844d7b1bfc69c6d9f00a45621248d35c12980cd/0.jpg)
+
+## Wiring:
+Standard jumper wires + breadboard.
+![IMG_20251018_105137_HDR.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5MywicHVyIjoiYmxvYl9pZCJ9fQ==--9530327cabeed7e2bb022f830163417aca0488e3/IMG_20251018_105137_HDR.jpg)
+
+## Power:
+Found out the hard way that neither a battery nor a USB connection can run four high-torque servos for long. Settled for a 5V DC Adaptor.![IMG_20251018_105311_HDR.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5NCwicHVyIjoiYmxvYl9pZCJ9fQ==--7502d6e2ab2c922099792aa00ce98263c7ef28a2/IMG_20251018_105311_HDR.jpg)
   
 
