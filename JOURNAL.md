@@ -56,3 +56,10 @@ Standard jumper wires + breadboard.
 Found out the hard way that neither a battery nor a USB connection can run four high-torque servos for long. Settled for a 5V DC Adaptor.![IMG_20251018_105311_HDR.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5NCwicHVyIjoiYmxvYl9pZCJ9fQ==--7502d6e2ab2c922099792aa00ce98263c7ef28a2/IMG_20251018_105311_HDR.jpg)
   
 
+## 10/18/2025 1:51 AM - Blueprint for Camera Setup  
+
+Brainstormed ideas for a cheap camera rig. Planned to use a mobile camera facing downwards, held up using a tripod stand. Briefly explored other hacks, like placing the camera over a cup holder hole in a table.
+This, I soon discovered, wouldn't work as the height of the arm itself was more than that of the small floor table. An expensive tripod seemed to be the only choice.
+![0.jpg](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg5OSwicHVyIjoiYmxvYl9pZCJ9fQ==--d9760e4894258abca9975a46e729fc9110fa22fe/0.jpg)
+  
+
