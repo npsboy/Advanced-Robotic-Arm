@@ -23,6 +23,18 @@ pico_serial = serial.Serial(serial_port, 115200, timeout=1)
 time.sleep(2)
 
 base_servo_angle = 50
+shoulder_servo_angle = 90
+elbow_servo_angle = 90
+claw_servo_angle = 90
+
+real_width = 45.0  # cm
+pixel_per_cm = 640 / real_width  # pixels per cm
+
+real_height = 480 / pixel_per_cm  # cm
+
+forearm_length = 12.0  # cm or could be 15.5
+upperarm_length = 12.0  # cm
+
 
 def nothing(x):
     return
@@ -34,6 +46,8 @@ annotated_frame = None
 
 keyboard.on_press_key('a', lambda e: on_a_press(e))
 def on_a_press(event):
+
+
     global annotated_frame
     print("a pressed")
     ret, frame = capture.read()
@@ -77,7 +91,7 @@ def on_a_press(event):
     angle_rad = math.atan2(distance_y, distance_x)
     angle_deg = math.degrees(angle_rad)
     global base_servo_angle
-    base_servo_angle = angle_deg * -1
+    base_servo_angle = angle_deg * -1 -10
     print("angle_deg:", angle_deg)
     print(f"Base Servo Angle: {base_servo_angle:.2f} degrees")
     if base_servo_angle < 0:
@@ -86,11 +100,70 @@ def on_a_press(event):
         base_servo_angle = 180
 
     distance = math.hypot(distance_x, distance_y)
+    real_distance = distance / pixel_per_cm
+
+    global shoulder_servo_angle
+    global elbow_servo_angle
+
+    shoulder_servo_angle = 90
+    elbow_servo_angle = 90
+
+    time.sleep(1)
+
+    shoulder_servo_angle = math.acos(np.clip((upperarm_length**2 + real_distance**2 - forearm_length**2) / (2 * upperarm_length * real_distance), -1.0, 1.0))
+    shoulder_servo_angle = 180 - (math.degrees(shoulder_servo_angle) - 20)
+    print(f"Shoulder Servo Angle: {shoulder_servo_angle:.2f} degrees")
+
+    elbow_servo_angle = math.acos(np.clip((upperarm_length**2 + forearm_length**2 - real_distance**2) / (2 * upperarm_length * forearm_length), -1.0, 1.0))
+    elbow_servo_angle = (math.degrees(elbow_servo_angle) + 0)
+    print(f"Elbow Servo Angle: {elbow_servo_angle:.2f} degrees")
 
     cv2.line(frame, (frame_center_x, frame_center_y), (int(object_center_x), int(object_center_y)), (0, 0, 255), 2)
     cv2.putText(frame, f"Angle: {base_servo_angle:.2f} degrees", (int(object_center_x), int(object_center_y) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 2)
 
+    time.sleep(1)
+
+    global claw_servo_angle
+    claw_servo_angle = 0  # Close claw
+
+    time.sleep(1)
+
+    shoulder_servo_angle = 90
+    elbow_servo_angle = 90
+
+    time.sleep(1)
+
+    base_servo_angle = 180
+
+    time.sleep(1)
+    claw_servo_angle = 90  # Open claw
+
     annotated_frame = frame.copy()
+
+
+def move_slowly(servo, end_angle):
+    global base_servo_angle, shoulder_servo_angle, elbow_servo_angle, claw_servo_angle
+    if servo == 1:
+        start_angle = base_servo_angle
+    elif servo == 2:
+        start_angle = shoulder_servo_angle
+    elif servo == 3:
+        start_angle = elbow_servo_angle
+    elif servo == 4:
+        start_angle = claw_servo_angle
+    else:
+        return
+
+    step = 1 if end_angle > start_angle else -1
+    for angle in range(start_angle, end_angle + step, step):
+        if servo == 1:
+            base_servo_angle = angle
+        elif servo == 2:
+            shoulder_servo_angle = angle
+        elif servo == 3:
+            elbow_servo_angle = angle
+        time.sleep(0.02)
+
 
 # Main loop to keep the program running
 while True:
@@ -99,6 +172,11 @@ while True:
         break
 
     frame = cv2.resize(frame, (640, 480))
+    height, width = frame.shape[:2]
+    frame_center_x = width // 2
+    frame_center_y = height // 4 * 3
+
+    cv2.circle(frame, (frame_center_x, frame_center_y), 5, (0, 0, 255), -1)
 
     # Display live feed
     cv2.imshow("Live Feed", frame)
@@ -108,6 +186,12 @@ while True:
         cv2.imshow("Detected Object", annotated_frame)
 
     instructions = {"angle": base_servo_angle, "servo": 1}
+    pico_serial.write(f"{json.dumps(instructions)}\n".encode())
+    instructions = {"angle": shoulder_servo_angle, "servo": 2}
+    pico_serial.write(f"{json.dumps(instructions)}\n".encode())
+    instructions = {"angle": elbow_servo_angle, "servo": 3}
+    pico_serial.write(f"{json.dumps(instructions)}\n".encode())
+    instructions = {"angle": claw_servo_angle, "servo": 4}
     pico_serial.write(f"{json.dumps(instructions)}\n".encode())
     pico_serial.flush()
 
