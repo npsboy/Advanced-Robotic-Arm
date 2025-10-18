@@ -10,7 +10,7 @@ This is my journal of the design and building process of **Vision Assisted Robot
 You can view this journal in more detail on **Hack Club Blueprint** [here](https://blueprint.hackclub.com/projects/651).
 
 
-## 10/18/2025 - Drafting an Idea  
+## 10/18/2025 12 AM - Drafting an Idea  
 
 After exploring some ideas, I came across this one. A rough idea of what I wanted:
 
@@ -18,4 +18,16 @@ After exploring some ideas, I came across this one. A rough idea of what I wante
 - Computer vision-assisted. Should be able to detect common items and pick them up as long as they are in sight.
 - Controlled by voice commands in natural language.
 ![image.png](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg4NiwicHVyIjoiYmxvYl9pZCJ9fQ==--be22ed8b44d79f32dda65217032984c80f67e436/image.png)  
+
+## 10/18/2025 1 AM - Exploring Feasibility  
+
+After drafting an idea, I spent some time exploring its feasibility. Here's what I found:
+
+- Robotic Arm: Standard. Doable.
+- Computer Vision: Doable with some caveats. The camera has to have a top-down view to avoid high complexity math regarding depth perception.
+- AI Assistant: Doable. I have experience implementing it in other projects.
+
+![image.png](https://blueprint.hackclub.com/user-attachments/blobs/proxy/eyJfcmFpbHMiOnsiZGF0YSI6Mjg4NywicHVyIjoiYmxvYl9pZCJ9fQ==--36d86ebccb78824fffd17e68596b7c3a2d636f83/image.png)
+This image shows the top down camera setup I had in mind.
+  
 
