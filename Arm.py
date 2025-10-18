@@ -12,7 +12,7 @@ import serial
 import time
 
 #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
-capture = cv2.VideoCapture(0)
+capture = cv2.VideoCapture(1)
 
 
 processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
@@ -40,7 +40,7 @@ def on_a_press(event):
     if not ret:
         return
 
-    frame = cv2.resize(frame, (1400, 720))
+    frame = cv2.resize(frame, (640, 480))
 
     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(img)
@@ -69,7 +69,7 @@ def on_a_press(event):
 
     height, width = frame.shape[:2]
     frame_center_x = width // 2
-    frame_center_y = height // 2
+    frame_center_y = height // 4 * 3
 
     distance_x = object_center_x - frame_center_x
     distance_y = object_center_y - frame_center_y
@@ -77,7 +77,9 @@ def on_a_press(event):
     angle_rad = math.atan2(distance_y, distance_x)
     angle_deg = math.degrees(angle_rad)
     global base_servo_angle
-    base_servo_angle = 90 - angle_deg
+    base_servo_angle = angle_deg * -1
+    print("angle_deg:", angle_deg)
+    print(f"Base Servo Angle: {base_servo_angle:.2f} degrees")
     if base_servo_angle < 0:
         base_servo_angle = 0
     elif base_servo_angle > 180:
@@ -86,7 +88,7 @@ def on_a_press(event):
     distance = math.hypot(distance_x, distance_y)
 
     cv2.line(frame, (frame_center_x, frame_center_y), (int(object_center_x), int(object_center_y)), (0, 0, 255), 2)
-    cv2.putText(frame, f"Angle: {angle_deg:.2f} degrees", (int(object_center_x), int(object_center_y) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    cv2.putText(frame, f"Angle: {base_servo_angle:.2f} degrees", (int(object_center_x), int(object_center_y) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 2)
 
     annotated_frame = frame.copy()
 
@@ -95,9 +97,9 @@ while True:
     ret, frame = capture.read()
     if not ret:
         break
-    
-    frame = cv2.resize(frame, (1400, 720))
-    
+
+    frame = cv2.resize(frame, (640, 480))
+
     # Display live feed
     cv2.imshow("Live Feed", frame)
     
@@ -112,6 +114,7 @@ while True:
     
     # Press 'q' to quit
     if cv2.waitKey(1) & 0xFF == ord('q'):
+        pico_serial.close()
         break
 
 capture.release()
