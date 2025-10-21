@@ -25,7 +25,7 @@ time.sleep(2)
 base_servo_angle = 50
 shoulder_servo_angle = 90
 elbow_servo_angle = 90
-claw_servo_angle = 90
+claw_servo_angle = 100
 
 real_width = 45.0  # cm
 pixel_per_cm = 640 / real_width  # pixels per cm
@@ -58,7 +58,7 @@ def on_a_press(event):
 
     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(img)
-    texts = [["pen", "pencil", "eraser", "sharpener"]]
+    texts = [["sharpener", "eraser", "pen", "pencil"]]
     inputs = processor(text=texts, images=img, return_tensors="pt")
     outputs = model(**inputs)
     results = processor.post_process_object_detection(outputs=outputs, target_sizes=[img.size[::-1]], threshold=0.01)[0]
@@ -90,8 +90,9 @@ def on_a_press(event):
 
     angle_rad = math.atan2(distance_y, distance_x)
     angle_deg = math.degrees(angle_rad)
-    global base_servo_angle
-    base_servo_angle = angle_deg * -1 -10
+
+    base_servo_angle = angle_deg * -1 - 30
+    move_slowly(1, base_servo_angle)
     print("angle_deg:", angle_deg)
     print(f"Base Servo Angle: {base_servo_angle:.2f} degrees")
     if base_servo_angle < 0:
@@ -100,23 +101,27 @@ def on_a_press(event):
         base_servo_angle = 180
 
     distance = math.hypot(distance_x, distance_y)
-    real_distance = distance / pixel_per_cm
+    real_distance = distance / pixel_per_cm + 4  # Adding 4a cm as an offset
 
-    global shoulder_servo_angle
-    global elbow_servo_angle
-
+ 
     shoulder_servo_angle = 90
+    move_slowly(2, shoulder_servo_angle)
     elbow_servo_angle = 90
+    move_slowly(3, elbow_servo_angle)
 
     time.sleep(1)
 
-    shoulder_servo_angle = math.acos(np.clip((upperarm_length**2 + real_distance**2 - forearm_length**2) / (2 * upperarm_length * real_distance), -1.0, 1.0))
-    shoulder_servo_angle = 180 - (math.degrees(shoulder_servo_angle) - 20)
-    print(f"Shoulder Servo Angle: {shoulder_servo_angle:.2f} degrees")
-
+    
     elbow_servo_angle = math.acos(np.clip((upperarm_length**2 + forearm_length**2 - real_distance**2) / (2 * upperarm_length * forearm_length), -1.0, 1.0))
     elbow_servo_angle = (math.degrees(elbow_servo_angle) + 0)
+    move_slowly(3, elbow_servo_angle)
     print(f"Elbow Servo Angle: {elbow_servo_angle:.2f} degrees")
+
+    shoulder_servo_angle = math.acos(np.clip((upperarm_length**2 + real_distance**2 - forearm_length**2) / (2 * upperarm_length * real_distance), -1.0, 1.0))
+    shoulder_servo_angle = 180 - (math.degrees(shoulder_servo_angle) - 20)
+    move_slowly(2, shoulder_servo_angle)
+    print(f"Shoulder Servo Angle: {shoulder_servo_angle:.2f} degrees")
+
 
     cv2.line(frame, (frame_center_x, frame_center_y), (int(object_center_x), int(object_center_y)), (0, 0, 255), 2)
     cv2.putText(frame, f"Angle: {base_servo_angle:.2f} degrees", (int(object_center_x), int(object_center_y) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 2)
@@ -124,19 +129,22 @@ def on_a_press(event):
     time.sleep(1)
 
     global claw_servo_angle
-    claw_servo_angle = 0  # Close claw
+    claw_servo_angle = 20  # Close claw
 
     time.sleep(1)
 
     shoulder_servo_angle = 90
+    move_slowly(2, shoulder_servo_angle)
     elbow_servo_angle = 90
+    move_slowly(3, elbow_servo_angle)
 
     time.sleep(1)
 
     base_servo_angle = 180
+    move_slowly(1, base_servo_angle)
 
     time.sleep(1)
-    claw_servo_angle = 90  # Open claw
+    claw_servo_angle = 100  # Open claw
 
     annotated_frame = frame.copy()
 
@@ -155,7 +163,7 @@ def move_slowly(servo, end_angle):
         return
 
     step = 1 if end_angle > start_angle else -1
-    for angle in range(start_angle, end_angle + step, step):
+    for angle in range(int(start_angle), int(end_angle + step), int(step)):
         if servo == 1:
             base_servo_angle = angle
         elif servo == 2:
