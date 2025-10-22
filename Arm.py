@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 import pvporcupine
 from pvrecorder import PvRecorder
 import asyncio
+import threading
 
 #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 capture = cv2.VideoCapture(1)
@@ -46,6 +47,8 @@ upperarm_length = 12.0  # cm
 base_location_x = 295
 base_location_y = 385
 
+texts = [["sharpener", "eraser", "pen", "pencil"]]
+
 
 def nothing(x):
     return
@@ -65,7 +68,7 @@ keyboard.on_press_key('l', lambda e: on_l_press(e))
 def object_identification(frame):
     img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(img)
-    texts = [["sharpener", "eraser", "pen", "pencil"]]
+    global texts
     inputs = processor(text=texts, images=img, return_tensors="pt")
     outputs = model(**inputs)
     results = processor.post_process_object_detection(outputs=outputs, target_sizes=[img.size[::-1]], threshold=0.01)[0]
@@ -226,11 +229,174 @@ def on_semicolon_press(event):
     global base_location_x
     base_location_x += 5
 
+# Speech Recognition and AI starts here
+load_dotenv()  # Load environment variables from .env file
+
+# Settings
+sample_rate = 16000  # 16 kHz recommended for Whisper
+channels = 1  # mono audio
+
+chunk_duration = 30  # ms
+chunk_size = int(sample_rate * chunk_duration / 1000)  # samples per chunk  
+
+vad = webrtcvad.Vad(2)   # 0-3
+
+silent_chunks_threshold = 60
+
+audio_chunks = []
+silent_chunks = 0
+
+final_text = ""
+
+def callback(indata, frames, time, status):
+    global silent_chunks
+    global audio_chunks
+    audio_data = indata[:, 0]
+    # Convert float32 audio to int16 PCM format for webrtcvad
+    audio_int16 = (audio_data * 32767).astype(np.int16)
+    is_speech = vad.is_speech(audio_int16.tobytes(), sample_rate)
+
+    if is_speech:
+        audio_chunks.append(audio_data.copy())
+        silent_chunks = 0
+    else:
+        silent_chunks += 1
+
+def record_audio():
+    global silent_chunks
+    global audio_chunks
+    audio_chunks.clear()  # reset buffer for next recording
+    silent_chunks = 0
+    
+    print("Recording...")
+
+    with sd.InputStream(samplerate=16000, channels=1, blocksize=chunk_size, callback=callback):
+        while silent_chunks < silent_chunks_threshold:
+            pass
+        
+    print("Recording complete.")
+    if audio_chunks:
+        audio_data = np.concatenate(audio_chunks)
+        sf.write("recorded_audio.wav", audio_data, sample_rate)
+        print("saved")
+    else:
+        return
+    
+    if audio_data.size == 0:
+        return
+
+    transcribe_audio_openai()
+    
+
+def transcribe_audio_openai():
+    global final_text
+    final_text = ""
+    audio_file = open("recorded_audio.wav", "rb")
+    transcript = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_file,
+        response_format="text",
+        language="en",
+    )
+    print(transcript)
+
+    if not transcript.strip():
+        return
+
+    final_text = transcript
+
+    
+    chat(final_text)
+
+    return transcript
+
+
+client = OpenAI()
+
+
+def chat(final_text):
+    if not final_text:
+        print("Error: No prompt provided")
+        return None
+    try:
+        response = client.chat.completions.create(
+            model="o4-mini",
+            messages=[
+                {"role": "system", "content": "You are an AI that controls a robotic arm with vision capabilities and outputs JSON. \
+                    Identify the user's intent and return a set of objects you need to look for as 'texts' field. eg: Pen, Pencil.\
+                 Leave it blank if not applicable. \
+                 Also return a 'text-reply' field with a short response to the user."},
+                {"role": "user", "content": final_text}
+            ],
+            response_format={ "type": "json_object" }
+        )
+        reply = json.loads(response.choices[0].message.content)["text-reply"]
+        print(reply)
+        global texts
+        texts = [json.loads(response.choices[0].message.content)["texts"]]
+        
+        # Run TTS and on_a_press simultaneously
+        tts_thread = threading.Thread(target=TTS, args=(reply,), daemon=True)
+        action_thread = threading.Thread(target=on_a_press, args=(None,), daemon=True)
+        
+        tts_thread.start()
+        action_thread.start()
+        
+        return reply
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return None
+
+
+def TTS(text):
+    with open("output.wav", "wb") as f:
+        audio = client.audio.speech.create(
+            model="tts-1",
+            voice="echo",  # voice name, can choose from available voices
+            input=text
+        )
+        f.write(audio.read())
+    data, samplerate = sf.read("output.wav", dtype='float32')
+
+    # Play it
+    sd.play(data, samplerate)
+    sd.wait()  # Wait until playback is finished
+    time.sleep(0.5)
+    record_audio()
 
 
 
 
+PV_API_KEY = os.getenv("PV_API_KEY")
+keyword_path = "./Helix_en_windows_v3_0_0.ppn"
+porcupine = pvporcupine.create(keyword_paths=[keyword_path], access_key=PV_API_KEY)  # keyword_paths expects a list
+recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
 
+
+def ListenForWake():
+    while True:
+        pcm = recorder.read()
+        keyword_index = porcupine.process(pcm)
+        if keyword_index >= 0:
+            print("Wake word detected!")
+            record_audio()
+
+def voice_thread():
+    recorder.start()
+    try:
+        while True:
+            print("Listening for wakeword...")
+            ListenForWake()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        recorder.stop()
+        porcupine.delete()
+        recorder.delete()
+
+# Start voice recognition in a separate thread
+voice_thread_instance = threading.Thread(target=voice_thread, daemon=True)
+voice_thread_instance.start()
 
 # Main loop to keep the program running
 while True:

@@ -4,6 +4,12 @@ env/
 .venv/
 .env/
 
+#
+# Audio files
+output.wav
+recorded_audio.wav
+
+
 # Python
 __pycache__/
 *.py[cod]
