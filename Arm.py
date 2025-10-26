@@ -1,3 +1,21 @@
+import threading
+import time
+import sys
+import itertools
+
+def spinner():
+    for c in itertools.cycle(['|', '/', '-', '\\']):
+        if done:
+            break
+        sys.stdout.write('\rLoading ' + c)
+        sys.stdout.flush()
+        time.sleep(0.1)
+    sys.stdout.write('\rStartup complete!\n')
+
+done = False
+Loading_animation = threading.Thread(target=spinner)
+Loading_animation.start()
+
 import cv2
 import numpy as np
 import math
@@ -5,7 +23,6 @@ from transformers import OwlViTProcessor, OwlViTForObjectDetection
 from PIL import Image
 import torch
 import os
-import time
 import keyboard
 import json
 import serial
@@ -18,7 +35,9 @@ from dotenv import load_dotenv
 import pvporcupine
 from pvrecorder import PvRecorder
 import asyncio
-import threading
+from multiprocessing import Process
+
+Loading_animation.join()
 
 #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 capture = cv2.VideoCapture(1)
@@ -336,9 +355,9 @@ def chat(final_text):
         texts = [json.loads(response.choices[0].message.content)["texts"]]
         
         # Run TTS and on_a_press simultaneously
-        tts_thread = threading.Thread(target=TTS, args=(reply,), daemon=True)
-        action_thread = threading.Thread(target=on_a_press, args=(None,), daemon=True)
-        
+        tts_thread = Process(target=TTS, args=(reply,), daemon=True)
+        action_thread = Process(target=on_a_press, args=(None,), daemon=True)
+
         tts_thread.start()
         action_thread.start()
         
@@ -362,8 +381,6 @@ def TTS(text):
     sd.play(data, samplerate)
     sd.wait()  # Wait until playback is finished
     time.sleep(0.5)
-    record_audio()
-
 
 
 
