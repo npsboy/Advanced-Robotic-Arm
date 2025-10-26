@@ -3,6 +3,8 @@ import time
 import sys
 import itertools
 
+done = False
+
 def spinner():
     for c in itertools.cycle(['|', '/', '-', '\\']):
         if done:
@@ -12,8 +14,7 @@ def spinner():
         time.sleep(0.1)
     sys.stdout.write('\rStartup complete!\n')
 
-done = False
-Loading_animation = threading.Thread(target=spinner)
+Loading_animation = threading.Thread(target=spinner, daemon=True)
 Loading_animation.start()
 
 import cv2
@@ -21,12 +22,10 @@ import numpy as np
 import math
 from transformers import OwlViTProcessor, OwlViTForObjectDetection
 from PIL import Image
-import torch
 import os
 import keyboard
 import json
 import serial
-from faster_whisper import WhisperModel
 import soundfile as sf
 import sounddevice as sd
 import webrtcvad
@@ -34,10 +33,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import pvporcupine
 from pvrecorder import PvRecorder
-import asyncio
 from multiprocessing import Process
-
-Loading_animation.join()
 
 #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 capture = cv2.VideoCapture(1)
@@ -45,6 +41,10 @@ capture = cv2.VideoCapture(1)
 
 processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
 model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
+
+done = True
+Loading_animation.join()
+
 
 serial_port = 'COM6'
 pico_serial = serial.Serial(serial_port, 115200, timeout=1)
