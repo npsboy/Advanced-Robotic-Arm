@@ -28,12 +28,14 @@ import json
 import serial
 import soundfile as sf
 import sounddevice as sd
+
 import webrtcvad
 from openai import OpenAI
 from dotenv import load_dotenv
 import pvporcupine
 from pvrecorder import PvRecorder
-from multiprocessing import Process
+
+import io
 
 #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
 capture = cv2.VideoCapture(1)
@@ -42,13 +44,15 @@ capture = cv2.VideoCapture(1)
 processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
 model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
 
-done = True
-Loading_animation.join()
-
 
 serial_port = 'COM6'
 pico_serial = serial.Serial(serial_port, 115200, timeout=1)
 time.sleep(2)
+
+done = True
+Loading_animation.join()
+print("\n")
+
 
 base_servo_angle = 50
 shoulder_servo_angle = 90
@@ -123,7 +127,7 @@ def calculate_distance_and_angle(frame, object_center_x, object_center_y):
     angle_deg = math.degrees(angle_rad)
 
     distance = math.hypot(distance_x, distance_y)
-    real_distance = distance / pixel_per_cm + 4  # Adding 4a cm as an offset
+    real_distance = distance / pixel_per_cm + 2  # Adding 4a cm as an offset
 
     return distance, real_distance, angle_deg
 
@@ -260,7 +264,7 @@ chunk_size = int(sample_rate * chunk_duration / 1000)  # samples per chunk
 
 vad = webrtcvad.Vad(2)   # 0-3
 
-silent_chunks_threshold = 60
+silent_chunks_threshold = 40
 
 audio_chunks = []
 silent_chunks = 0
@@ -281,38 +285,39 @@ def callback(indata, frames, time, status):
     else:
         silent_chunks += 1
 
+buffer = io.BytesIO()
+buffer.name = 'recording.wav'
+
+
 def record_audio():
     global silent_chunks
     global audio_chunks
-    audio_chunks.clear()  # reset buffer for next recording
+    global buffer
+    audio_chunks.clear()
     silent_chunks = 0
-    
     print("Recording...")
-
     with sd.InputStream(samplerate=16000, channels=1, blocksize=chunk_size, callback=callback):
         while silent_chunks < silent_chunks_threshold:
             pass
-        
     print("Recording complete.")
-    if audio_chunks:
-        audio_data = np.concatenate(audio_chunks)
-        sf.write("recorded_audio.wav", audio_data, sample_rate)
-        print("saved")
-    else:
+    if not audio_chunks:
         return
-    
+    audio_data = np.concatenate(audio_chunks)
     if audio_data.size == 0:
         return
-
+    buffer = io.BytesIO()
+    buffer.name = "audio.wav"
+    sf.write(buffer, audio_data, sample_rate, format='WAV')
+    buffer.seek(0)
     transcribe_audio_openai()
     
 
 def transcribe_audio_openai():
     global final_text
     final_text = ""
-    audio_file = open("recorded_audio.wav", "rb")
+    audio_file = buffer
     transcript = client.audio.transcriptions.create(
-        model="whisper-1",
+        model="gpt-4o-mini-transcribe",
         file=audio_file,
         response_format="text",
         language="en",
@@ -338,8 +343,9 @@ def chat(final_text):
         print("Error: No prompt provided")
         return None
     try:
+        print("time before api call:", time.strftime("%H:%M:%S", time.localtime()), f"{int((time.time() % 1) * 1000):03d}ms")
         response = client.chat.completions.create(
-            model="o4-mini",
+            model="gpt-4.1-nano",
             messages=[
                 {"role": "system", "content": "You are an AI that controls a robotic arm with vision capabilities and outputs JSON. \
                     Identify the user's intent and return a set of objects you need to look for as 'texts' field. eg: Pen, Pencil.\
@@ -350,16 +356,13 @@ def chat(final_text):
             response_format={ "type": "json_object" }
         )
         reply = json.loads(response.choices[0].message.content)["text-reply"]
+        print("time after api call:", time.strftime("%H:%M:%S", time.localtime()), f"{int((time.time() % 1) * 1000):03d}ms")
         print(reply)
         global texts
         texts = [json.loads(response.choices[0].message.content)["texts"]]
         
-        # Run TTS and on_a_press simultaneously
-        tts_thread = Process(target=TTS, args=(reply,), daemon=True)
-        action_thread = Process(target=on_a_press, args=(None,), daemon=True)
-
-        tts_thread.start()
-        action_thread.start()
+        TTS(reply)
+        on_a_press(None)
         
         return reply
     except Exception as e:
@@ -368,20 +371,18 @@ def chat(final_text):
 
 
 def TTS(text):
-    with open("output.wav", "wb") as f:
-        audio = client.audio.speech.create(
-            model="tts-1",
-            voice="echo",  # voice name, can choose from available voices
-            input=text
-        )
-        f.write(audio.read())
-    data, samplerate = sf.read("output.wav", dtype='float32')
-
-    # Play it
+    audio_response = client.audio.speech.create(
+        model="gpt-4o-mini-tts",
+        voice="echo",
+        input=text
+    )
+    
+    audio_buffer = io.BytesIO(audio_response.read())
+    audio_buffer.seek(0)
+    data, samplerate = sf.read(audio_buffer, dtype='float32')
+    
     sd.play(data, samplerate)
     sd.wait()  # Wait until playback is finished
-    time.sleep(0.5)
-
 
 
 PV_API_KEY = os.getenv("PV_API_KEY")
@@ -447,9 +448,15 @@ while True:
     
     # Press 'q' to quit
     if cv2.waitKey(1) & 0xFF == ord('q'):
+        running = False  # Signal threads to stop
+        keyboard.unhook_all()  # Remove all keyboard listeners
         pico_serial.close()
+        
+        # Wait for voice thread to finish
+        voice_thread_instance.join(timeout=2)
         break
 
 capture.release()
 cv2.destroyAllWindows()
 cv2.destroyAllWindows()
+sys.exit()
