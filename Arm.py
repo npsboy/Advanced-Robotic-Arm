@@ -37,8 +37,13 @@ from pvrecorder import PvRecorder
 
 import io
 
-#capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
-capture = cv2.VideoCapture(1)
+
+try:
+    #capture = cv2.VideoCapture("http://192.168.68.103:8080/video")
+    capture = cv2.VideoCapture(1)
+except Exception as e:
+    print(f"Error: Webcam unavailable.")
+    sys.exit(1)
 
 
 processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
@@ -46,7 +51,11 @@ model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
 
 
 serial_port = 'COM6'
-pico_serial = serial.Serial(serial_port, 115200, timeout=1)
+try:
+    pico_serial = serial.Serial(serial_port, 115200, timeout=1)
+except serial.SerialException:
+    print(f"Error: Could not open serial port {serial_port}. Please check the connection.")
+    sys.exit(1)
 time.sleep(2)
 
 done = True
