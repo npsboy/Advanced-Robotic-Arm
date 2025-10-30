@@ -12,3 +12,10 @@
 - The computer relays the instructions to the Pico.
 - A webcam is positioned with a top-down view of the surroundings to help the arm detect objects and their positions.
 <img width="4405" height="1414" alt="diagram" src="https://github.com/user-attachments/assets/806618e4-5085-4f0b-a2ec-c85382208395" />
+
+## Native dependencies
+
+Install the PortAudio runtime before installing Python requirements so microphone input works:
+- Ubuntu / Debian / WSL: `sudo apt-get install libportaudio2 portaudio19-dev`
+- macOS (Homebrew): `brew install portaudio`
+- Windows: `pip install pipwin && pipwin install portaudio`
