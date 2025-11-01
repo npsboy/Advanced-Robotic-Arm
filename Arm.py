@@ -83,15 +83,40 @@ object_texts = [["sharpener", "eraser", "pen", "pencil"]]
 drop_target_texts = []
 
 abort_pickup = False
-
-
-def nothing(x):
-    return
-
-print("Press 'a' to capture an image and detect objects.")
-print("Press 'q' to quit.")
-
 annotated_frame = None
+
+# Ignore Region variables
+ignore_x1, ignore_y1, ignore_x2, ignore_y2 = 100, 100, 540, 380  # Default ignore region
+dragging_corner = None  # Which corner is being dragged
+corner_size = 15  # Size of the draggable corner areas
+
+def mouse_callback(event, x, y, flags, param):
+    global ignore_x1, ignore_y1, ignore_x2, ignore_y2, dragging_corner
+    
+    if event == cv2.EVENT_LBUTTONDOWN:
+        # Check if click is near any corner
+        if abs(x - ignore_x1) < corner_size and abs(y - ignore_y1) < corner_size:
+            dragging_corner = 'top_left'
+        elif abs(x - ignore_x2) < corner_size and abs(y - ignore_y1) < corner_size:
+            dragging_corner = 'top_right'
+        elif abs(x - ignore_x1) < corner_size and abs(y - ignore_y2) < corner_size:
+            dragging_corner = 'bottom_left'
+        elif abs(x - ignore_x2) < corner_size and abs(y - ignore_y2) < corner_size:
+            dragging_corner = 'bottom_right'
+    
+    elif event == cv2.EVENT_MOUSEMOVE and dragging_corner:
+        # Update corner position based on which corner is being dragged
+        if dragging_corner == 'top_left':
+            ignore_x1, ignore_y1 = max(0, min(x, ignore_x2 - 50)), max(0, min(y, ignore_y2 - 50))
+        elif dragging_corner == 'top_right':
+            ignore_x2, ignore_y1 = min(640, max(x, ignore_x1 + 50)), max(0, min(y, ignore_y2 - 50))
+        elif dragging_corner == 'bottom_left':
+            ignore_x1, ignore_y2 = max(0, min(x, ignore_x2 - 50)), min(480, max(y, ignore_y1 + 50))
+        elif dragging_corner == 'bottom_right':
+            ignore_x2, ignore_y2 = min(640, max(x, ignore_x1 + 50)), min(480, max(y, ignore_y1 + 50))
+    
+    elif event == cv2.EVENT_LBUTTONUP:
+        dragging_corner = None
 
 keyboard.on_press_key('a', lambda e: on_a_press(e))
 
@@ -102,20 +127,28 @@ keyboard.on_press_key('k', lambda e: on_k_press(e))
 keyboard.on_press_key('l', lambda e: on_l_press(e))
 
 def object_identification(frame, texts):
-    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # Create a mask for the ignore region
+    global ignore_x1, ignore_y1, ignore_x2, ignore_y2
+    mask = np.ones(frame.shape[:2], dtype=np.uint8) * 255
+    mask[ignore_y1:ignore_y2, ignore_x1:ignore_x2] = 0  # Set ignore region to 0
+    
+    # Apply mask to frame
+    masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
+    
+    img = cv2.cvtColor(masked_frame, cv2.COLOR_BGR2RGB)
     img = Image.fromarray(img)
     inputs = processor(text=texts, images=img, return_tensors="pt")
     outputs = model(**inputs)
     results = processor.post_process_object_detection(outputs=outputs, target_sizes=[img.size[::-1]], threshold=0.005)[0]
 
-    highest_score_idx = results["scores"].argmax().item()
-    object_label = results["labels"][highest_score_idx].item() #.item() to get value from tensor
-    box = results["boxes"][highest_score_idx].tolist()
-
     # Check if any objects were detected
     if len(results["scores"]) == 0:
         print("No objects detected.")
         return
+    
+    highest_score_idx = results["scores"].argmax().item()
+    object_label = results["labels"][highest_score_idx].item()
+    box = results["boxes"][highest_score_idx].tolist()
     
     print(f"Object: {texts[0][object_label]}, Score: {results['scores'][highest_score_idx].item():.3f}")
     print(f"Box Coordinates: {box}")
@@ -139,7 +172,7 @@ def calculate_distance_and_angle(frame, object_center_x, object_center_y):
     angle_deg = math.degrees(angle_rad)
 
     distance = math.hypot(distance_x, distance_y)
-    real_distance = distance / pixel_per_cm  + 2 # Adding 2 cm as an offset
+    real_distance = distance / pixel_per_cm  + 3 # Adding 3 cm as an offset
 
     return distance, real_distance, angle_deg
 
@@ -165,15 +198,22 @@ def pick_up_object(real_distance):
     claw_servo_angle = 20  # Close claw
 
 def drop_object(drop_real_distance):
-    elbow_servo_angle = math.acos(np.clip((upperarm_length**2 + forearm_length**2 - drop_real_distance**2) / (2 * upperarm_length * forearm_length), -1.0, 1.0))
+    print("Dropping object...")
+    drop_height = 25  # cm
+    drop_point_distance = math.sqrt(drop_real_distance**2 + drop_height**2)
+
+    elbow_servo_angle = math.acos(np.clip((upperarm_length**2 + forearm_length**2 - drop_point_distance**2) / (2 * upperarm_length * forearm_length), -1.0, 1.0))
     elbow_servo_angle = (math.degrees(elbow_servo_angle) + 0) + 10
+    print(f"Elbow Servo Angle for Drop: {elbow_servo_angle:.2f} degrees")
     move_slowly(3, elbow_servo_angle)
 
-    shoulder_servo_angle = math.acos(np.clip((upperarm_length**2 + drop_real_distance**2 - forearm_length**2) / (2 * upperarm_length * drop_real_distance), -1.0, 1.0))
-    shoulder_servo_angle = 180 - (math.degrees(shoulder_servo_angle) - 20)
-    shoulder_servo_angle = shoulder_servo_angle + math.atan(20 / drop_real_distance)  # Adjust for drop height
+    shoulder_servo_angle = math.acos(np.clip((upperarm_length**2 + drop_point_distance**2 - forearm_length**2) / (2 * upperarm_length * drop_point_distance), -1.0, 1.0))
+    shoulder_servo_angle = math.degrees(shoulder_servo_angle) + math.degrees(math.atan(drop_height / drop_real_distance))  # Adjust for drop height
+
+    shoulder_servo_angle = 180 - (shoulder_servo_angle - 20)
+    print(f"Shoulder Servo Angle for Drop: {shoulder_servo_angle:.2f} degrees")
     move_slowly(2, shoulder_servo_angle)
-    time.sleep(1)
+    time.sleep(0.5)
     global claw_servo_angle
     claw_servo_angle = 100  # Open claw
 
@@ -181,7 +221,27 @@ def drop_object(drop_real_distance):
 
 
 def annotate_frame(frame, box, object_center_x, object_center_y, drop_target_box, drop_target_center_x, drop_target_center_y):
-    global annotated_frame
+    global annotated_frame, ignore_x1, ignore_y1, ignore_x2, ignore_y2
+    
+    # Draw ignore region rectangle
+    cv2.rectangle(frame, (ignore_x1, ignore_y1), (ignore_x2, ignore_y2), (0, 0, 255), 2)  # Red
+    
+    # Draw diagonal lines across ignore region
+    num_lines = 10
+    step_x = (ignore_x2 - ignore_x1) // num_lines
+    step_y = (ignore_y2 - ignore_y1) // num_lines
+    
+    # Diagonal lines from top-left to bottom-right
+    for i in range(num_lines + 1):
+        cv2.line(frame, 
+                (ignore_x1 + i * step_x, ignore_y1), 
+                (ignore_x1, ignore_y1 + i * step_y), 
+                (0, 0, 255), 1)
+        cv2.line(frame, 
+                (ignore_x1 + i * step_x, ignore_y2), 
+                (ignore_x2, ignore_y1 + i * step_y), 
+                (0, 0, 255), 1)
+    
     cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
     cv2.circle(frame, (int(object_center_x), int(object_center_y)), 5, (255, 0, 0), -1)
     cv2.line(frame, (base_location_x, base_location_y), (int(object_center_x), int(object_center_y)), (0, 0, 255), 2)
@@ -194,9 +254,7 @@ def annotate_frame(frame, box, object_center_x, object_center_y, drop_target_box
         cv2.line(frame, (base_location_x, base_location_y), (int(drop_target_center_x), int(drop_target_center_y)), (0, 255, 255), 2)
         cv2.putText(frame, f"Drop Target", (int(drop_target_center_x), int(drop_target_center_y) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 2)
 
-    annotated_frame = frame.copy()  # Assign to global variable
-
-
+    annotated_frame = frame.copy()
 
 def on_a_press(event):
     global abort_pickup
@@ -586,6 +644,9 @@ voice_thread_instance = threading.Thread(target=voice_thread, daemon=True)
 voice_thread_instance.start()
 
 # Main loop to keep the program running
+cv2.namedWindow("Live Feed")
+cv2.setMouseCallback("Live Feed", mouse_callback)
+
 while True:
     ret, frame = capture.read()
     if not ret:
@@ -594,6 +655,30 @@ while True:
     frame = cv2.resize(frame, (640, 480))
     height, width = frame.shape[:2]
 
+    # Draw ignore region rectangle
+    cv2.rectangle(frame, (ignore_x1, ignore_y1), (ignore_x2, ignore_y2), (0, 0, 255), 2)  # Red
+    
+    # Draw diagonal lines across ignore region
+    num_lines = 10
+    step_x = (ignore_x2 - ignore_x1) // num_lines
+    step_y = (ignore_y2 - ignore_y1) // num_lines
+    
+    # Diagonal lines from top-left to bottom-right
+    for i in range(num_lines + 1):
+        cv2.line(frame, 
+                (ignore_x1 + i * step_x, ignore_y1), 
+                (ignore_x1, ignore_y1 + i * step_y), 
+                (0, 0, 255), 1)
+        cv2.line(frame, 
+                (ignore_x1 + i * step_x, ignore_y2), 
+                (ignore_x2, ignore_y1 + i * step_y), 
+                (0, 0, 255), 1)
+    
+    # Draw corner handles
+    cv2.circle(frame, (ignore_x1, ignore_y1), 5, (0, 0, 255), -1)  # Top-left
+    cv2.circle(frame, (ignore_x2, ignore_y1), 5, (0, 0, 255), -1)  # Top-right
+    cv2.circle(frame, (ignore_x1, ignore_y2), 5, (0, 0, 255), -1)  # Bottom-left
+    cv2.circle(frame, (ignore_x2, ignore_y2), 5, (0, 0, 255), -1)  # Bottom-right
 
     cv2.circle(frame, (base_location_x, base_location_y), 5, (0, 0, 255), -1)
 
