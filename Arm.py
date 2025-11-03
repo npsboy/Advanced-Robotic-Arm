@@ -69,6 +69,7 @@ elbow_servo_angle = 90
 claw_servo_angle = 100
 
 real_width = 45.0  # cm
+
 pixel_per_cm = 640 / real_width  # pixels per cm
 
 real_height = 480 / pixel_per_cm  # cm
@@ -82,8 +83,26 @@ base_location_y = 385
 object_texts = [["sharpener", "eraser", "pen", "pencil"]]
 drop_target_texts = []
 
-abort_pickup = False
+abort_event = threading.Event()
 annotated_frame = None
+pickup_thread = None  # Track the current pickup thread
+
+def check_abort():
+    """Raise an exception if abort was requested"""
+    if abort_event.is_set():
+        raise InterruptedError("Pickup aborted by user!")
+
+def interruptible_sleep(duration):
+    """Sleep for duration seconds, but check for abort every 0.1s"""
+    steps = int(duration / 0.1)
+    for _ in range(steps):
+        check_abort()
+        time.sleep(0.1)
+    # Sleep remaining time
+    remaining = duration - (steps * 0.1)
+    if remaining > 0:
+        check_abort()
+        time.sleep(remaining)
 
 # Ignore Region variables
 ignore_x1, ignore_y1, ignore_x2, ignore_y2 = 100, 100, 540, 380  # Default ignore region
@@ -172,7 +191,7 @@ def calculate_distance_and_angle(frame, object_center_x, object_center_y):
     angle_deg = math.degrees(angle_rad)
 
     distance = math.hypot(distance_x, distance_y)
-    real_distance = distance / pixel_per_cm  + 3 # Adding 3 cm as an offset
+    real_distance = distance / pixel_per_cm  + 4 # Adding 4 cm as an offset
 
     return distance, real_distance, angle_deg
 
@@ -257,171 +276,130 @@ def annotate_frame(frame, box, object_center_x, object_center_y, drop_target_box
     annotated_frame = frame.copy()
 
 def on_a_press(event):
-    global abort_pickup
-    abort_pickup = False  # Reset abort flag
-
-    print("a pressed")
-    ret, frame = capture.read()
-    if not ret:
+    global pickup_thread
+    # If a pickup is already running, don't start another one
+    if pickup_thread is not None and pickup_thread.is_alive():
+        print("Pickup already in progress!")
         return
-
-    frame = cv2.resize(frame, (640, 480))
-
-    # Retry mechanism for distance validation
-    max_retries = 3
-    retry_count = 0
-    real_distance = 0
     
-    while retry_count < max_retries:
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-            
-        results = object_identification(frame, [object_texts[0]])
-        box = results["box"]
-        object_label = results["object_label"]
-        object_center_x = results["object_center_x"]
-        object_center_y = results["object_center_y"]
+    # Start pickup in a new thread
+    pickup_thread = threading.Thread(target=pickup_sequence, daemon=True)
+    pickup_thread.start()
 
-        distance, real_distance, angle_deg = calculate_distance_and_angle(frame, object_center_x, object_center_y)
-        
-        if real_distance >= 4:
-            break
-        
-        retry_count += 1
-        print(f"Distance too small ({real_distance:.2f} cm). Retrying detection... ({retry_count}/{max_retries})")
-        for _ in range(5):  # Interruptible 0.5s sleep
-            if abort_pickup:
-                print("Pickup aborted by user!")
-                return
-            time.sleep(0.1)
+def pickup_sequence():
+    """The actual pickup logic that runs in a separate thread"""
+    abort_event.clear()  # Reset abort flag
+
+    print("Starting pickup sequence...")
+    try:
         ret, frame = capture.read()
         if not ret:
             return
+
         frame = cv2.resize(frame, (640, 480))
+
+        # Retry mechanism for distance validation
+        max_retries = 3
+        retry_count = 0
+        real_distance = 0
+        
+        while retry_count < max_retries:
+            check_abort()
+            
+            results = object_identification(frame, [object_texts[0]])
+            box = results["box"]
+            object_label = results["object_label"]
+            object_center_x = results["object_center_x"]
+            object_center_y = results["object_center_y"]
+
+            distance, real_distance, angle_deg = calculate_distance_and_angle(frame, object_center_x, object_center_y)
+            
+            if real_distance >= 4:
+                break
+            
+            retry_count += 1
+            print(f"Distance too small ({real_distance:.2f} cm). Retrying detection... ({retry_count}/{max_retries})")
+            interruptible_sleep(0.5)
+            ret, frame = capture.read()
+            if not ret:
+                return
+            frame = cv2.resize(frame, (640, 480))
+        
+        if real_distance < 4:
+            print(f"Warning: Distance still too small after {max_retries} retries ({real_distance:.2f} cm). Aborting pickup.")
+            return
+
+        check_abort()
+
+        if drop_target_texts and drop_target_texts[0]:
+            print("drop target texts =", drop_target_texts)
+            results = object_identification(frame, drop_target_texts)
+            drop_target_box = results["box"]
+            drop_target_label = results["object_label"]
+            drop_target_center_x = results["object_center_x"]
+            drop_target_center_y = results["object_center_y"]
+        else:
+            drop_target_box = None
+            drop_target_center_x = None
+            drop_target_center_y = None
+
+        annotate_frame(frame, box, object_center_x, object_center_y, drop_target_box, drop_target_center_x, drop_target_center_y)
+        interruptible_sleep(0.5)
+        
+        distance, real_distance, angle_deg = calculate_distance_and_angle(frame, object_center_x, object_center_y)
+        if drop_target_box is not None:
+            drop_distance, drop_real_distance, drop_angle_deg = calculate_distance_and_angle(frame, drop_target_center_x, drop_target_center_y)
+
+        check_abort()
+
+        move_slowly(1, angle_deg * -1 - 30)
+        check_abort()
+        move_upper_servos_to_default()
+        check_abort()
+        interruptible_sleep(0.5)
+
+        check_abort()
+
+        pick_up_object(real_distance)
+        check_abort()
+        interruptible_sleep(1.0)
+
+        check_abort()
+
+        move_upper_servos_to_default()
+        check_abort()
+
+        interruptible_sleep(1.0)
+
+        check_abort()
+
+        if drop_target_box is not None:
+            move_slowly(1, drop_angle_deg * -1 - 30)
+            check_abort()
+            interruptible_sleep(1.0)
+
+            check_abort()
+
+            drop_object(drop_real_distance)
+            check_abort()
+            interruptible_sleep(1.0)
+        else:
+            move_slowly(1, 180)
+            check_abort()
+        
+            interruptible_sleep(1.0)
+            global claw_servo_angle
+            claw_servo_angle = 100  # Open claw
+        
+        print("Pickup sequence completed successfully!")
     
-    if real_distance < 4:
-        print(f"Warning: Distance still too small after {max_retries} retries ({real_distance:.2f} cm). Aborting pickup.")
+    except InterruptedError as e:
+        print(str(e))
         return
-
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-
-    if drop_target_texts and drop_target_texts[0]:
-        print("drop target texts =", drop_target_texts)
-        results = object_identification(frame, drop_target_texts)
-        drop_target_box = results["box"]
-        drop_target_label = results["object_label"]
-        drop_target_center_x = results["object_center_x"]
-        drop_target_center_y = results["object_center_y"]
-    else:
-        drop_target_box = None
-        drop_target_center_x = None
-        drop_target_center_y = None
-
-    annotate_frame(frame, box, object_center_x, object_center_y, drop_target_box, drop_target_center_x, drop_target_center_y)
-    for _ in range(5):  # Interruptible 0.5s sleep
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-        time.sleep(0.1)
-    distance, real_distance, angle_deg = calculate_distance_and_angle(frame, object_center_x, object_center_y)
-    if drop_target_box is not None:
-        drop_distance, drop_real_distance, drop_angle_deg = calculate_distance_and_angle(frame, drop_target_center_x, drop_target_center_y)
-
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-
-    move_slowly(1, angle_deg * -1 - 30)
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-    move_upper_servos_to_default()
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-    for _ in range(10):  # Interruptible 1s sleep
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-        time.sleep(0.1)
-
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-
-    pick_up_object(real_distance)
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-    for _ in range(10):  # Interruptible 1s sleep
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-        time.sleep(0.1)
-
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-
-    move_upper_servos_to_default()
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-
-    for _ in range(10):  # Interruptible 1s sleep
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-        time.sleep(0.1)
-
-    if abort_pickup:
-        print("Pickup aborted by user!")
-        return
-
-    if drop_target_box is not None:
-        move_slowly(1, drop_angle_deg * -1 - 30)
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-        for _ in range(10):  # Interruptible 1s sleep
-            if abort_pickup:
-                print("Pickup aborted by user!")
-                return
-            time.sleep(0.1)
-
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-
-        drop_object(drop_real_distance)
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-        for _ in range(10):  # Interruptible 1s sleep
-            if abort_pickup:
-                print("Pickup aborted by user!")
-                return
-            time.sleep(0.1)
-    else:
-        move_slowly(1, 180)
-        if abort_pickup:
-            print("Pickup aborted by user!")
-            return
-    
-        for _ in range(10):  # Interruptible 1s sleep
-            if abort_pickup:
-                print("Pickup aborted by user!")
-                return
-            time.sleep(0.1)
-        global claw_servo_angle
-        claw_servo_angle = 100  # Open claw
 
 
 def move_slowly(servo, end_angle):
-    global base_servo_angle, shoulder_servo_angle, elbow_servo_angle, claw_servo_angle, abort_pickup
+    global base_servo_angle, shoulder_servo_angle, elbow_servo_angle, claw_servo_angle
     if servo == 1:
         start_angle = base_servo_angle
     elif servo == 2:
@@ -435,8 +413,7 @@ def move_slowly(servo, end_angle):
 
     step = 1 if end_angle > start_angle else -1
     for angle in range(int(start_angle), int(end_angle + step), int(step)):
-        if abort_pickup:
-            return  # Exit immediately if abort is requested
+        check_abort()  # Check once per step
         if servo == 1:
             base_servo_angle = angle
         elif servo == 2:
@@ -462,9 +439,8 @@ def on_semicolon_press(event):
     base_location_x += 5
 
 def on_g_press(event):
-    global abort_pickup
-    abort_pickup = True
-    print("Abort requested! Press 'g' to stop pickup operation.")
+    abort_event.set()
+    print("Abort requested! Stopping pickup operation.")
 
 # Speech Recognition and AI starts here
 load_dotenv()  # Load environment variables from .env file
@@ -587,11 +563,12 @@ def chat(final_text):
         
         TTS(reply)
         if object_texts != [[]]:
-            on_a_press(None)
+            on_a_press(None)  # This will now start a thread
         else:
             print("no request found. cancelling pickup ")
 
         return reply
+        
     except Exception as e:
         print(f"Error: {str(e)}")
         return None
