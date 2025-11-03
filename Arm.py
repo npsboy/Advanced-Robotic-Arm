@@ -212,11 +212,12 @@ def pick_up_object(real_distance):
     shoulder_servo_angle = 180 - (math.degrees(shoulder_servo_angle) - 20)
     move_slowly(2, shoulder_servo_angle)
     print(f"Shoulder Servo Angle: {shoulder_servo_angle:.2f} degrees")
-    time.sleep(1)
+    time.sleep(0.5)
     global claw_servo_angle
     claw_servo_angle = 20  # Close claw
 
 def drop_object(drop_real_distance):
+    drop_real_distance -= 4  # Adjust for drop offset
     print("Dropping object...")
     drop_height = 25  # cm
     drop_point_distance = math.sqrt(drop_real_distance**2 + drop_height**2)
