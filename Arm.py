@@ -86,6 +86,7 @@ drop_target_texts = []
 abort_event = threading.Event()
 annotated_frame = None
 pickup_thread = None  # Track the current pickup thread
+wake_word_enabled = True  # Toggle for wake word listening
 
 def check_abort():
     """Raise an exception if abort was requested"""
@@ -146,6 +147,7 @@ def mouse_callback(event, x, y, flags, param):
 keyboard.on_press_key('a', lambda e: on_a_press(e))
 
 keyboard.on_press_key('g', lambda e: on_g_press(e))
+keyboard.on_press_key('0', lambda e: on_0_press(e))
 keyboard.on_press_key('semicolon', lambda e: on_semicolon_press(e))
 keyboard.on_press_key('o', lambda e: on_o_press(e))
 keyboard.on_press_key('k', lambda e: on_k_press(e))
@@ -452,6 +454,12 @@ def on_g_press(event):
     abort_event.set()
     print("Abort requested! Stopping pickup operation.")
 
+def on_0_press(event):
+    global wake_word_enabled
+    wake_word_enabled = not wake_word_enabled
+    status = "enabled" if wake_word_enabled else "disabled"
+    print(f"Wake word listening {status}")
+
 # Speech Recognition and AI starts here
 load_dotenv()  # Load environment variables from .env file
 
@@ -607,11 +615,14 @@ recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
 
 def ListenForWake():
     while True:
-        pcm = recorder.read()
-        keyword_index = porcupine.process(pcm)
-        if keyword_index >= 0:
-            print("Wake word detected!")
-            record_audio()
+        if wake_word_enabled:
+            pcm = recorder.read()
+            keyword_index = porcupine.process(pcm)
+            if keyword_index >= 0:
+                print("Wake word detected!")
+                record_audio()
+        else:
+            time.sleep(0.1)  # Sleep briefly when disabled to reduce CPU usage
 
 def voice_thread():
     recorder.start()
