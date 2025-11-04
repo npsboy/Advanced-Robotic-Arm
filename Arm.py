@@ -104,6 +104,12 @@ def interruptible_sleep(duration):
         check_abort()
         time.sleep(remaining)
 
+def draw_base_circle(frame):
+    """Draw a circle representing the arm's reach around the base location"""
+    radius_cm = 20
+    radius_pixels = int(radius_cm * pixel_per_cm)
+    cv2.circle(frame, (base_location_x - 30, base_location_y), radius_pixels, (255, 255, 0), 2)  # Light blue (cyan)
+
 # Ignore Region variables
 ignore_x1, ignore_y1, ignore_x2, ignore_y2 = 100, 100, 540, 380  # Default ignore region
 dragging_corner = None  # Which corner is being dragged
@@ -261,6 +267,9 @@ def annotate_frame(frame, box, object_center_x, object_center_y, drop_target_box
                 (ignore_x1 + i * step_x, ignore_y2), 
                 (ignore_x2, ignore_y1 + i * step_y), 
                 (0, 0, 255), 1)
+    
+    
+    draw_base_circle(frame)
     
     cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
     cv2.circle(frame, (int(object_center_x), int(object_center_y)), 5, (255, 0, 0), -1)
@@ -658,6 +667,8 @@ while True:
     cv2.circle(frame, (ignore_x1, ignore_y2), 5, (0, 0, 255), -1)  # Bottom-left
     cv2.circle(frame, (ignore_x2, ignore_y2), 5, (0, 0, 255), -1)  # Bottom-right
 
+    draw_base_circle(frame)
+    
     cv2.circle(frame, (base_location_x, base_location_y), 5, (0, 0, 255), -1)
 
     # Display live feed
