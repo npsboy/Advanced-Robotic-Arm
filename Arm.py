@@ -199,7 +199,7 @@ def calculate_distance_and_angle(frame, object_center_x, object_center_y):
     angle_deg = math.degrees(angle_rad)
 
     distance = math.hypot(distance_x, distance_y)
-    real_distance = distance / pixel_per_cm  + 4 # Adding 4 cm as an offset
+    real_distance = distance / pixel_per_cm  + 2 # Adding 4 cm as an offset
 
     return distance, real_distance, angle_deg
 
@@ -386,7 +386,7 @@ def pickup_sequence():
         check_abort()
 
         if drop_target_box is not None:
-            move_slowly(1, drop_angle_deg * -1 - 30)
+            move_slowly(1, drop_angle_deg * -1)
             check_abort()
             interruptible_sleep(1.0)
 
